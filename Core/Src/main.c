@@ -23,11 +23,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "stdio.h"
-#include "string.h"
-//#include <iostream>
 /* USER CODE END Includes */
-
+#include <stdio.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
@@ -44,94 +44,40 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-
 /* USER CODE BEGIN PV */
-//const char string[]={"AT+SPD"};
-//char *str_array[]={"AT+SPD","AT+SPD=?","AT+SPD="};
+volatile uint8_t UartReady=RESET;//флаг для чтения;
+char readBuf[20];//буфер, где будут помещаться принятые байты
+char writeBuf[20];
+uint8_t rxbyte;//переменная для приёма по одному байту
+uint8_t i=0;//инкремент для readBuf 
 const char str_array[12][20]={
-		"AT+SPD",
-		"AT+LNOPEN",
-		"AT+LNHLOPEN",
-        "AT+CURERRLOCK1",
-        "AT+CURERRLOCK2", 
-        "AT+CURERRDRIVE1", 
-        "AT+CURERRDRIVE2", 
-        "AT+CURERRDRIVE3", 
-        "AT+CURERRDRIVE4", 
-        "AT+CURERRTIME",
-        "AT+STOTIMELOCK", 
-        "AT+STOTIMEDRIVE" 
-    };
-const char str_array1[12][20]={
-		"AT+SPD=?",
-		"AT+LNOPEN=?",
-		"AT+LNHLOPEN=?",
-        "AT+CURERRLOCK1=?",
-        "AT+CURERRLOCK2=?", 
-        "AT+CURERRDRIVE1=?", 
-        "AT+CURERRDRIVE2=?", 
-        "AT+CURERRDRIVE3=?", 
-        "AT+CURERRDRIVE4=?", 
-        "AT+CURERRTIME=?",
-        "AT+STOTIMELOCK=?", 
-        "AT+STOTIMEDRIVE=?" 
-    };
-const char str_array2[12][20]={
-		"AT+SPD?",
-		"AT+LNOPEN?",
-		"AT+LNHLOPEN?",
-        "AT+CURERRLOCK1?",
-        "AT+CURERRLOCK2?", 
-        "AT+CURERRDRIVE1?", 
-        "AT+CURERRDRIVE2?", 
-        "AT+CURERRDRIVE3?", 
-        "AT+CURERRDRIVE4?", 
-        "AT+CURERRTIME?",
-        "AT+STOTIMELOCK?", 
-        "AT+STOTIMEDRIVE?" 
-    };
-const char str_array3[12][20]={
-		"AT+SPD=",
-		"AT+LNOPEN=",
-		"AT+LNHLOPEN=",
-        "AT+CURERRLOCK1=",
-        "AT+CURERRLOCK2=", 
-        "AT+CURERRDRIVE1=", 
-        "AT+CURERRDRIVE2=", 
-        "AT+CURERRDRIVE3=", 
-        "AT+CURERRDRIVE4=", 
-        "AT+CURERRTIME=",
-        "AT+STOTIMELOCK=", 
-        "AT+STOTIMEDRIVE=" 
-    };
-int t;
-char str[20];//для сканирования строк
-char p[]={""};//параметры, которые может принимать команда
-char v[]={""};//текущее значение и для записи
+		"SPD",
+		"LNOPEN",
+		"LNHLOPEN",
+        "CURERRLOCK1",
+        "CURERRLOCK2", 
+        "CURERRDRIVE1", 
+        "CURERRDRIVE2", 
+        "CURERRDRIVE3", 
+        "CURERRDRIVE4", 
+        "CURERRTIME",
+        "STOTIMELOCK", 
+        "STOTIMEDRIVE" 
+    };//словарь
+//int number;
+int val_array[12]={1,2,3,4,5,6,7,8,9,10,11,12};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-void parametrs(char*,int);
-void current_value(char*);
-void new_value(char*);
-
+char* readUserInput(void);
+int check (void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-int fputc(int ch,FILE *f)
-{
-	HAL_UART_Transmit(&huart1,(uint8_t *)&ch,1,HAL_MAX_DELAY);
-	return ch;
-}
-int fgetc(FILE *f)
-{
-	uint8_t ch;
-	HAL_UART_Receive( &huart1,(uint8_t*)&ch,1, HAL_MAX_DELAY );
-	return ch;
-}
+
 /* USER CODE END 0 */
 
 /**
@@ -141,7 +87,7 @@ int fgetc(FILE *f)
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+    
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -164,59 +110,169 @@ int main(void)
   MX_GPIO_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  /* Разрешение прерываний от USART1 */
+   HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
+   HAL_NVIC_EnableIRQ(USART1_IRQn);
   /* USER CODE END 2 */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  printf("Enter AT command\r\n");
+  //UartReady=RESET;
+  HAL_UART_Receive_IT(&huart1, &rxbyte, 1);//вызов приёма, подготовка к приёму
   while (1)
   {
+       if (UartReady==SET)
+       {
+           switch (check())
+           {
+               case 0:
+                   //sprintf(writeBuf, "%s", readBuf);//передаём в массив writeBuf
+                    //if(readBuf[6]=='\r')
+                       // sprintf(writeBuf, "%s\r\n", "Ok");
+                    if(readBuf[6]!='=' && readBuf[6]!='?')
+                        //if(readBuf[6]!='?')
+                        sprintf(writeBuf, "%s", "Error\r\n");//передаём в массив writeBuf
+                    if (readBuf[6]=='?'&& readBuf[7]=='\r')
+                        //Выдать описание команды
+                        //if(readBuf[7]=='\r') 
+                        sprintf(writeBuf, "%s\r\n", "Connection speed");
+                    else
+                        sprintf(writeBuf, "%s\r\n", "Error");
+                    if (readBuf[6]=='=')
+                    {
+                        if (readBuf[7]=='?')
+                        {
+                            //=?
+                            //выдать текущее значение параметра
+                            sprintf(writeBuf, "%d\r\n",val_array[0]);//передаём в массив writeBuf
+                        }
+                        else
+                        {
+                            //=
+                            //присвоить новое значение
+                            sscanf(&readBuf[7],"%d",&val_array[0]);
+                            if(isdigit(readBuf[7]))                            
+                                sprintf(writeBuf, "%d\r\n", val_array[0]);
+                            else
+                                 sprintf(writeBuf, "%s\r\n", "Error");
+                        }
+                    }
+               break;
+               case 1:  
+                   /*sprintf(writeBuf, "%s", readBuf);//передаём в массив writeBuf
+                     if(readBuf[9]!='=' && readBuf[9]!='?')
+                        //if(readBuf[6]!='?')
+                        sprintf(writeBuf, "%s", "Error\r\n");//передаём в массив writeBuf
+                    if (readBuf[9]=='?'&& readBuf[10]=='\r')
+                        //Выдать описание команды
+                        //if(readBuf[7]=='\r') 
+                        sprintf(writeBuf, "%s\r\n", "Full opening distance");
+                    else
+                        sprintf(writeBuf, "%s\r\n", "Error");
+                    if (readBuf[9]=='=')
+                    {
+                        if (readBuf[10]=='?')
+                        {
+                            //=?
+                            //выдать текущее значение параметра
+                            sprintf(writeBuf, "%d\r\n",val_array[1]);//передаём в массив writeBuf
+                        }
+                        else
+                        {
+                            //=
+                            //присвоить новое значение
+                            sscanf(&readBuf[10],"%d",&val_array[1]);
+                            if(isdigit(readBuf[10]))                            
+                                sprintf(writeBuf, "%d\r\n", val_array[1]);
+                            else
+                                 sprintf(writeBuf, "%s\r\n", "Error");
+                        }
+                    }*/
+                    
+               break;
+               case 2:  
+                   //sprintf(writeBuf, "%s", readBuf);//передаём в массив writeBuf
+               break;
+               case 3:  
+                   //sprintf(writeBuf, "%s", readBuf);//передаём в массив writeBuf
+               break;
+               case 4:  
+                   //sprintf(writeBuf, "%s", readBuf);//передаём в массив writeBuf
+               break;
+               case 5:  
+                   //sprintf(writeBuf, "%s", readBuf);//передаём в массив writeBuf
+               break;
+               case 6:  
+                   //sprintf(writeBuf, "%s", readBuf);//передаём в массив writeBuf
+               break;
+               case 7:  
+                   //sprintf(writeBuf, "%s", readBuf);//передаём в массив writeBuf
+               break;
+               case 8:  
+                   //sprintf(writeBuf, "%s", readBuf);//передаём в массив writeBuf
+               break;
+               case 9:  
+                   //sprintf(writeBuf, "%s", readBuf);//передаём в массив writeBuf
+               break;
+               case 10:  
+                   //sprintf(writeBuf, "%s", readBuf);//передаём в массив writeBuf
+               break;
+               case 11:  
+                   //sprintf(writeBuf, "%s", readBuf);//передаём в массив writeBuf
+               break;
+               default: 
+                   sprintf(writeBuf, "%s", "Error\r\n");//передаём в массив writeBuf
+               break;
+               
+           }
+           /*HAL_UART_Transmit_IT(&huart1, (uint8_t*)writeBuf, strlen(writeBuf));
+           while (HAL_UART_GetState(&huart1) == HAL_UART_STATE_BUSY_TX ||
+            HAL_UART_GetState(&huart1) == HAL_UART_STATE_BUSY_TX_RX);*/
+           UartReady=RESET;//сбрасываем флаг 
+           HAL_UART_Transmit(&huart1, (uint8_t*)writeBuf, strlen(writeBuf), HAL_MAX_DELAY);
+           HAL_UART_Receive_IT(&huart1, &rxbyte, 1);//вызов приёма, подготовка к приёму
+       }
+       
+      /*
+      if (UartReady==SET)//если флаг установлен
+      {
+          if(readBuf[0]=='A' && readBuf[1]=='T' && readBuf[2]=='+')
+          {
+                      for(int j=0;j<12;j++)
+                      {
+                        if((strstr(readBuf,str_array[j]))!=NULL)
+                        {
+                      //strstr(readBuf,str_array[0]);
+                            sprintf(writeBuf, "%s", readBuf);//передаём в массив writeBuf
+                            HAL_UART_Transmit(&huart1, (uint8_t*)writeBuf, strlen(writeBuf), HAL_MAX_DELAY);
+                        }                        
+                      }
+          }
+          else
+          {
+              sprintf(writeBuf, "%s", "Error\r\n");//передаём в массив writeBuf
+              HAL_UART_Transmit(&huart1, (uint8_t*)writeBuf, strlen(writeBuf), HAL_MAX_DELAY);
+          }
+          UartReady=RESET;//сбрасываем флаг 
+          HAL_UART_Receive_IT(&huart1, &rxbyte, 1);//вызов приёма, подготовка к приёму
+      }
+      
+      */
+      
     /* USER CODE END WHILE */
-    scanf("%s",str);
-    printf("You enter AT command: %s\r\n",str);
-    for(int i=0;i<12;i++)
-    {
-      //if(strcmp(str,str_array[i])==0)// '\0'
-       // t=strcmp(str,str_array[i]);
-        if(!strcmp(str,str_array[i]))
-        {
-            //printf("t=%d, i=%d\r\n",t,i);
-            printf("OK\r\n");
-        }
-      /*if(strchr(str,'?')!=0)//если строка содержит символ
-            printf("String keep symbol %c\n",'?');
-      if(strchr(str,'=')!=0)//если строка содержит символ
-            printf("String keep symbol %c\n",'=');*/
-    }
-    for(int j=0;j<12;j++)
-    {
-      if(strcmp(str,str_array1[j])==0)// "=?"
-          parametrs(str,j);  
-    }
-    for(int k=0;k<12;k++)
-    {
-      if(strcmp(str,str_array2[k])==0)//'?'
-          current_value(str);  
-    }
-    for(int l=0;l<12;l++)
-    {
-      if(strcmp(str, str_array3[l])==0)//'='
-          new_value(str);  
-    }
-    printf("Enter AT command\r\n");
-      /*if(strchr(str,'?')!=0)//если строка содержит символ
-          printf("String keep symbol %c\n",'?');
-      if(strchr(str,'=')!=0)//если строка содержит символ
-          printf("String keep symbol %c\n",'=');*/
-      //if((strchr(str,'=')&&strchr(str,'?'))!=0)//если строка содержит символ
-      //{
-         //if(strchr(str,'?')!=0)//если строка содержит символ
-            // printf("String keep symbol %c %c\n",'=','?');
-      //}
-   }
+    
+	//opt=readUserInput();
+    //if(opt>0)
+    //{
+        //sprintf(msg, "%d", opt);
+       // sprintf(writeBuf, "%s", opt);
+        //UartReady = RESET;
+       // HAL_UART_Transmit(&huart1, (uint8_t*)writeBuf, strlen(writeBuf), HAL_MAX_DELAY);
+    //}
     /* USER CODE BEGIN 3 */
-  }
+	
   /* USER CODE END 3 */
+  }
+}
 
 /**
   * @brief System Clock Configuration
@@ -254,73 +310,61 @@ void SystemClock_Config(void)
   }
 }
 
+
 /* USER CODE BEGIN 4 */
-void parametrs(char *s,int j)
+
+int check (void)
 {
-    s+=2;//удаляем первые два символа
-    s[strlen(s)-2]='\0';//удаляем последние два символа
-    printf("%s: ",s);
-    switch(j)
+    if(readBuf[0] !='A' || readBuf[1]!='T' || readBuf[2]!='+') return (-1);
+    for(int j=0;j<12;j++)
     {
-        case 0: 
-            printf("(1 2 3 4)\r\n");
-            break;
-        case 1: 
-            printf("(5 6 7 8)\r\n");
-            break;
-        case 2: 
-            printf("(9 10 11 12)\r\n");
-            break;
-        case 3: 
-            printf("(13 14 15 16)\r\n");
-            break;
-        case 4: 
-            printf("(17 18 19 20)\r\n");
-            break;
-        case 5: 
-            printf("(21 22 23 24)\r\n");
-            break;
-        case 6: 
-           printf("(25 26 27 28)\r\n");
-            break;
-        case 7: 
-            printf("(29 30 31 32)\r\n");
-            break;
-        case 8: 
-            printf("(33 34 35 36)\r\n");
-            break;
-        case 9: 
-            printf("(37 38 39 40)\r\n");
-            break;
-        case 10: 
-            printf("(41 42 43 44)\r\n");
-            break;
-        case 11: 
-            printf("(45 46 47 48)\r\n");
-            break;    
-        default: 
-            printf("default\r\n");
-            break;
+        if((strstr(readBuf,str_array[j]))!=NULL)
+            return (j);
     }
-    //char *pos,*pos1;
-    //pos=strchr(s,'?');//ищем символ '?' в строке
-    //pos1=strchr(s,'=');//ищем символ '=' в строке
-    //printf("%s%s",pos,pos1);
-    //for(int i=*pos;i<strlen(s);++i)
-    //s[i]=s[i+1];//мы не можем удалить символ, но можем заменить на следующий
+    return (-1);
 }
-void current_value(char *s)
+
+
+char* readUserInput(void) 
 {
-	s+=2;//удаляем первые два символа
-    s[strlen(s)-1]='\0';//удаляем последний  символ
-    printf("%s: %s\r\n",s,v);
+    //int8_t retVal = -1;
+    if(UartReady == SET) 
+    {
+        UartReady = RESET;    
+        //while(i<sizeof(readBuf))
+        //{
+            //p=&readBuf[i];
+            //HAL_UART_Receive_IT(&huart1, (uint8_t*)p, 1);     
+            //if(readBuf[0]=='A')
+                //if(readBuf[1]=='T')
+                    //if(readBuf[2]=='+')
+                        //break;
+            //return p;
+            //if(p=='OD') 
+            //i++;           
+        //}
+    }
+  //retVal = atoi(readBuf);//функция atoi преобразует строковые  числа в целые
+    return 0;
 }
-void new_value(char *s)
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle) 
 {
-    printf("Enter new value\r\n");
-    scanf("%s",v);
-    printf("Value=%s\r\n",v);	
+/* Установить флаг передачи: передача завершена */
+   // UartReady = SET;
+    readBuf[i++]=rxbyte;//принимаем побайтно
+    if (i >= 20) //если буфер переполнился 
+        i=0;//сбрасываем счётчик
+    if (rxbyte=='\n') //если принятый байт символ перевода каретки
+    {
+        readBuf[i++] = '\0';//добавляем символ конца строки
+        UartReady = SET; //устанавливаем флаг
+        i=0;//сбрасываем счётчик        
+        //HAL_UART_AbortReceive(&huart1);//прекращение приёма из UART
+    }
+    else 
+        HAL_UART_Receive_IT(&huart1, &rxbyte, 1);//вызов приёма, подготовка к приёму
 }
+
 /* USER CODE END 4 */
 
 /**
